@@ -11,12 +11,12 @@ const double INF = 1e20;
 const double EPS = 1e-6;
 const double MaxDepth = 5;
 
-// *** ‚»‚Ì‘¼‚ÌŠÖ” ***
+// *** ãã®ä»–ã®é–¢æ•° ***
 inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; } 
 inline int toInt(double x){ return int(pow(clamp(x),1/2.2)*255+.5); } 
 inline double rand01() { return (double)rand()/RAND_MAX; }
 
-// *** ƒf[ƒ^\‘¢ ***
+// *** ãƒ‡ãƒ¼ã‚¿æ§‹é€  ***
 struct Vec {
 	double x, y, z;
 	Vec(const double x_ = 0, const double y_ = 0, const double z_ = 0) : x(x_), y(y_), z(z_) {}
@@ -29,7 +29,7 @@ struct Vec {
 };
 inline Vec operator*(double f, const Vec &v) { return v * f; }
 inline Vec Normalize(const Vec &v) { return v / v.Length(); }
-// —v‘f‚²‚Æ‚ÌÏ‚ğ‚Æ‚é
+// è¦ç´ ã”ã¨ã®ç©ã‚’ã¨ã‚‹
 inline const Vec Multiply(const Vec &v1, const Vec &v2) {
 	return Vec(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z);
 }
@@ -48,9 +48,9 @@ struct Ray {
 };
 
 enum ReflectionType {
-	DIFFUSE,    // Š®‘SŠgU–ÊB‚¢‚í‚ä‚éLambertian–ÊB
-	SPECULAR,   // —‘z“I‚È‹¾–ÊB
-	REFRACTION, // —‘z“I‚ÈƒKƒ‰ƒX“I•¨¿B
+	DIFFUSE,    // å®Œå…¨æ‹¡æ•£é¢ã€‚ã„ã‚ã‚†ã‚‹Lambertiané¢ã€‚
+	SPECULAR,   // ç†æƒ³çš„ãªé¡é¢ã€‚
+	REFRACTION, // ç†æƒ³çš„ãªã‚¬ãƒ©ã‚¹çš„ç‰©è³ªã€‚
 };
 
 struct Sphere {
@@ -61,7 +61,7 @@ struct Sphere {
 
 	Sphere(const double radius_, const Vec &position_, const Color &emission_, const Color &color_, const ReflectionType ref_type_) :
 	  radius(radius_), position(position_), emission(emission_), color(color_), ref_type(ref_type_) {}
-	// “ü—Í‚Ìray‚É‘Î‚·‚éŒğ·“_‚Ü‚Å‚Ì‹——£‚ğ•Ô‚·BŒğ·‚µ‚È‚©‚Á‚½‚ç0‚ğ•Ô‚·B
+	// å…¥åŠ›ã®rayã«å¯¾ã™ã‚‹äº¤å·®ç‚¹ã¾ã§ã®è·é›¢ã‚’è¿”ã™ã€‚äº¤å·®ã—ãªã‹ã£ãŸã‚‰0ã‚’è¿”ã™ã€‚
 	const double intersect(const Ray &ray) {
 		Vec o_p = position - ray.org;
 		const double b = Dot(o_p, ray.dir), det = b * b - Dot(o_p, o_p) + radius * radius;
@@ -75,22 +75,22 @@ struct Sphere {
 	}
 };
 
-// *** ƒŒƒ“ƒ_ƒŠƒ“ƒO‚·‚éƒV[ƒ“ƒf[ƒ^ ****
+// *** ãƒ¬ãƒ³ãƒ€ãƒªãƒ³ã‚°ã™ã‚‹ã‚·ãƒ¼ãƒ³ãƒ‡ãƒ¼ã‚¿ ****
 // from small ppt
 Sphere spheres[] = {
-	Sphere(1e5, Vec( 1e5+1,40.8,81.6), Color(), Color(0.75, 0.25, 0.25),DIFFUSE),// ¶
-	Sphere(1e5, Vec(-1e5+99,40.8,81.6),Color(), Color(0.25, 0.25, 0.75),DIFFUSE),// ‰E
-	Sphere(1e5, Vec(50,40.8, 1e5),     Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// ‰œ
-	Sphere(1e5, Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// è‘O
-	Sphere(1e5, Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// °
-	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// “Vˆä
-	Sphere(16.5,Vec(27,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// ‹¾
-	Sphere(16.5,Vec(73,16.5,78),       Color(), Color(1,1,1)*.99, REFRACTION),//ƒKƒ‰ƒX
-	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(6,6,6), Color(), DIFFUSE),//Æ–¾
+	Sphere(1e5, Vec( 1e5+1,40.8,81.6), Color(), Color(0.75, 0.25, 0.25),DIFFUSE),// å·¦
+	Sphere(1e5, Vec(-1e5+99,40.8,81.6),Color(), Color(0.25, 0.25, 0.75),DIFFUSE),// å³
+	Sphere(1e5, Vec(50,40.8, 1e5),     Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// å¥¥
+	Sphere(1e5, Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// æ‰‹å‰
+	Sphere(1e5, Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// åºŠ
+	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// å¤©äº•
+	Sphere(16.5,Vec(27,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// é¡
+	Sphere(16.5,Vec(73,16.5,78),       Color(), Color(1,1,1)*.99, REFRACTION),//ã‚¬ãƒ©ã‚¹
+	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(6,6,6), Color(), DIFFUSE),//ç…§æ˜
 };
 
-// *** ƒŒƒ“ƒ_ƒŠƒ“ƒO—pŠÖ” ***
-// ƒV[ƒ“‚Æ‚ÌŒğ·”»’èŠÖ”
+// *** ãƒ¬ãƒ³ãƒ€ãƒªãƒ³ã‚°ç”¨é–¢æ•° ***
+// ã‚·ãƒ¼ãƒ³ã¨ã®äº¤å·®åˆ¤å®šé–¢æ•°
 inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 	const double n = sizeof(spheres) / sizeof(Sphere);
 	*t  = INF;
@@ -105,30 +105,30 @@ inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 	return *t < INF;
 }
 
-// ray•ûŒü‚©‚ç‚Ì•úË‹P“x‚ğ‹‚ß‚é
+// rayæ–¹å‘ã‹ã‚‰ã®æ”¾å°„è¼åº¦ã‚’æ±‚ã‚ã‚‹
 Color radiance(const Ray &ray, const int depth) {
-	double t; // ƒŒƒC‚©‚çƒV[ƒ“‚ÌŒğ·ˆÊ’u‚Ü‚Å‚Ì‹——£
-	int id;   // Œğ·‚µ‚½ƒV[ƒ““àƒIƒuƒWƒFƒNƒg‚ÌID
+	double t; // ãƒ¬ã‚¤ã‹ã‚‰ã‚·ãƒ¼ãƒ³ã®äº¤å·®ä½ç½®ã¾ã§ã®è·é›¢
+	int id;   // äº¤å·®ã—ãŸã‚·ãƒ¼ãƒ³å†…ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã®ID
 	if (!intersect_scene(ray, &t, &id))
 		return BackgroundColor;
 
 	const Sphere &obj = spheres[id];
-	const Vec hitpoint = ray.org + t * ray.dir; // Œğ·ˆÊ’u
-	const Vec normal  = Normalize(hitpoint - obj.position); // Œğ·ˆÊ’u‚Ì–@ü
-	const Vec orienting_normal = Dot(normal, ray.dir) < 0.0 ? normal : (-1.0 * normal); // Œğ·ˆÊ’u‚Ì–@üi•¨‘Ì‚©‚ç‚ÌƒŒƒC‚Ì“üo‚ğl—¶j
-	// F‚Ì”½Ë—¦Å‘å‚Ì‚à‚Ì‚ğ“¾‚éBƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚Åg‚¤B
-	// ƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚Ìè‡’l‚Í”CˆÓ‚¾‚ªF‚Ì”½Ë—¦“™‚ğg‚¤‚Æ‚æ‚è—Ç‚¢B
+	const Vec hitpoint = ray.org + t * ray.dir; // äº¤å·®ä½ç½®
+	const Vec normal  = Normalize(hitpoint - obj.position); // äº¤å·®ä½ç½®ã®æ³•ç·š
+	const Vec orienting_normal = Dot(normal, ray.dir) < 0.0 ? normal : (-1.0 * normal); // äº¤å·®ä½ç½®ã®æ³•ç·šï¼ˆç‰©ä½“ã‹ã‚‰ã®ãƒ¬ã‚¤ã®å…¥å‡ºã‚’è€ƒæ…®ï¼‰
+	// è‰²ã®åå°„ç‡æœ€å¤§ã®ã‚‚ã®ã‚’å¾—ã‚‹ã€‚ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã§ä½¿ã†ã€‚
+	// ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã®é–¾å€¤ã¯ä»»æ„ã ãŒè‰²ã®åå°„ç‡ç­‰ã‚’ä½¿ã†ã¨ã‚ˆã‚Šè‰¯ã„ã€‚
 	double rossian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
-	// ˆê’èˆÈãƒŒƒC‚ğ’ÇÕ‚µ‚½‚çƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚ğÀs‚µ’ÇÕ‚ğ‘Å‚¿Ø‚é‚©‚Ç‚¤‚©‚ğ”»’f‚·‚é
+	// ä¸€å®šä»¥ä¸Šãƒ¬ã‚¤ã‚’è¿½è·¡ã—ãŸã‚‰ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã‚’å®Ÿè¡Œã—è¿½è·¡ã‚’æ‰“ã¡åˆ‡ã‚‹ã‹ã©ã†ã‹ã‚’åˆ¤æ–­ã™ã‚‹
 	if (depth > MaxDepth) {
 		if (rand01() >= rossian_roulette_probability)
 			return obj.emission;
 	} else
-		rossian_roulette_probability = 1.0; // ƒƒVƒAƒ“ƒ‹[ƒŒƒbƒgÀs‚µ‚È‚©‚Á‚½
+		rossian_roulette_probability = 1.0; // ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆå®Ÿè¡Œã—ãªã‹ã£ãŸ
 
 	switch (obj.ref_type) {
 	case DIFFUSE: {
-		// orienting_normal‚Ì•ûŒü‚ğŠî€‚Æ‚µ‚½³‹K’¼ŒğŠî’ê(w, u, v)‚ğì‚éB‚±‚ÌŠî’ê‚É‘Î‚·‚é”¼‹…“à‚ÅŸ‚ÌƒŒƒC‚ğ”ò‚Î‚·B
+		// orienting_normalã®æ–¹å‘ã‚’åŸºæº–ã¨ã—ãŸæ­£è¦ç›´äº¤åŸºåº•(w, u, v)ã‚’ä½œã‚‹ã€‚ã“ã®åŸºåº•ã«å¯¾ã™ã‚‹åŠçƒå†…ã§æ¬¡ã®ãƒ¬ã‚¤ã‚’é£›ã°ã™ã€‚
 		Vec w, u, v;
 		w = orienting_normal;
 		if (fabs(w.x) > 0.1)
@@ -136,16 +136,16 @@ Color radiance(const Ray &ray, const int depth) {
 		else
 			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
 		v = Cross(w, u);
-		// ƒRƒTƒCƒ“€‚ğg‚Á‚½d“_“IƒTƒ“ƒvƒŠƒ“ƒO
+		// ã‚³ã‚µã‚¤ãƒ³é …ã‚’ä½¿ã£ãŸé‡ç‚¹çš„ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°
 		/*
 		const double r1 = 2 * PI * rand01();
 		const double r2 = rand01(), r2s = sqrt(r2);
 		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
 
-		// ƒŒƒ“ƒ_ƒŠƒ“ƒO•û’ö®‚É]‚¦‚Î Le + Li(ray) * BRDF * cosƒÆ / pdf(ray) ‚É‚È‚éB
-		// ‚½‚¾‚µAã‚ÅƒRƒTƒCƒ“€‚É‚æ‚éd“_“IƒTƒ“ƒvƒŠƒ“ƒO‚ğ‚µ‚½‚½‚ßpdf(ray) = cosƒÆ/ƒÎ‚É‚È‚èA
-		// Diffuse–Ê‚ÌBRDF = 1/ƒÎ‚È‚Ì‚ÅA‚±‚ê‚ç‚ğ‘ã“ü‚·‚é‚Æ Le + Li(ray) ‚Æ‚È‚éB
-		// ‚±‚ê‚ÉƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚ÌŠm—¦‚ğœZ‚µ‚½‚à‚Ì‚ªÅI“I‚ÈŒvZ®‚É‚È‚éB
+		// ãƒ¬ãƒ³ãƒ€ãƒªãƒ³ã‚°æ–¹ç¨‹å¼ã«å¾“ãˆã° Le + Li(ray) * BRDF * cosÎ¸ / pdf(ray) ã«ãªã‚‹ã€‚
+		// ãŸã ã—ã€ä¸Šã§ã‚³ã‚µã‚¤ãƒ³é …ã«ã‚ˆã‚‹é‡ç‚¹çš„ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ã‚’ã—ãŸãŸã‚pdf(ray) = cosÎ¸/Ï€ã«ãªã‚Šã€
+		// Diffuseé¢ã®BRDF = 1/Ï€ãªã®ã§ã€ã“ã‚Œã‚‰ã‚’ä»£å…¥ã™ã‚‹ã¨ Le + Li(ray) ã¨ãªã‚‹ã€‚
+		// ã“ã‚Œã«ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã®ç¢ºç‡ã‚’é™¤ç®—ã—ãŸã‚‚ã®ãŒæœ€çµ‚çš„ãªè¨ˆç®—å¼ã«ãªã‚‹ã€‚
 		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / rossian_roulette_probability;
 		*/
 
@@ -153,51 +153,51 @@ Color radiance(const Ray &ray, const int depth) {
 
 	} break;
 	case SPECULAR: {
-		// Š®‘S‹¾–Ê‚È‚Ì‚ÅƒŒƒC‚Ì”½Ë•ûŒü‚ÍŒˆ’è“IB
-		// ƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚ÌŠm—¦‚ÅœZ‚·‚é‚Ì‚Íã‚Æ“¯‚¶B
+		// å®Œå…¨é¡é¢ãªã®ã§ãƒ¬ã‚¤ã®åå°„æ–¹å‘ã¯æ±ºå®šçš„ã€‚
+		// ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã®ç¢ºç‡ã§é™¤ç®—ã™ã‚‹ã®ã¯ä¸Šã¨åŒã˜ã€‚
 		return obj.emission + Multiply(obj.color,
 			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / rossian_roulette_probability;
 	} break;
 	case REFRACTION: {
 		Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
-		bool into = Dot(normal, orienting_normal) > 0.0; // ƒŒƒC‚ªƒIƒuƒWƒFƒNƒg‚©‚ço‚é‚Ì‚©A“ü‚é‚Ì‚©
+		bool into = Dot(normal, orienting_normal) > 0.0; // ãƒ¬ã‚¤ãŒã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã‹ã‚‰å‡ºã‚‹ã®ã‹ã€å…¥ã‚‹ã®ã‹
 
-		// Snell‚Ì–@‘¥
-		const double nc = 1.0; // ^‹ó‚Ì‹üÜ—¦
-		const double nt = 1.5; // ƒIƒuƒWƒFƒNƒg‚Ì‹üÜ—¦
+		// Snellã®æ³•å‰‡
+		const double nc = 1.0; // çœŸç©ºã®å±ˆæŠ˜ç‡
+		const double nt = 1.5; // ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã®å±ˆæŠ˜ç‡
 		const double nnt = into ? nc / nt : nt / nc;
 		const double ddn = Dot(ray.dir, orienting_normal);
 		const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
 		
-		if (cos2t < 0.0) { // ‘S”½Ë‚µ‚½
+		if (cos2t < 0.0) { // å…¨åå°„ã—ãŸ
 			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / rossian_roulette_probability;
 		}
-		// ‹üÜ‚µ‚Ä‚¢‚­•ûŒü
+		// å±ˆæŠ˜ã—ã¦ã„ãæ–¹å‘
 		Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
 
-		// Schlick‚É‚æ‚éFresnel‚Ì”½ËŒW”‚Ì‹ß—
+		// Schlickã«ã‚ˆã‚‹Fresnelã®åå°„ä¿‚æ•°ã®è¿‘ä¼¼
 		const double a = nt - nc, b = nt + nc;
 		const double R0 = (a * a) / (b * b);
 		const double c = 1.0 - (into ? -ddn : Dot(tdir, normal));
 		const double Re = R0 + (1.0 - R0) * pow(c, 5.0);
-		const double Tr = 1.0 - Re; // ‹üÜŒõ‚Ì‰^‚ÔŒõ‚Ì—Ê
+		const double Tr = 1.0 - Re; // å±ˆæŠ˜å…‰ã®é‹ã¶å…‰ã®é‡
 		const double probability  = 0.25 + 0.5 * Re;
 
-		// ˆê’èˆÈãƒŒƒC‚ğ’ÇÕ‚µ‚½‚ç‹üÜ‚Æ”½Ë‚Ì‚Ç‚¿‚ç‚©ˆê•û‚ğ’ÇÕ‚·‚éBi‚³‚à‚È‚¢‚Æw”“I‚ÉƒŒƒC‚ª‘‚¦‚éj
-		// ƒƒVƒAƒ“ƒ‹[ƒŒƒbƒg‚ÅŒˆ’è‚·‚éB
+		// ä¸€å®šä»¥ä¸Šãƒ¬ã‚¤ã‚’è¿½è·¡ã—ãŸã‚‰å±ˆæŠ˜ã¨åå°„ã®ã©ã¡ã‚‰ã‹ä¸€æ–¹ã‚’è¿½è·¡ã™ã‚‹ã€‚ï¼ˆã•ã‚‚ãªã„ã¨æŒ‡æ•°çš„ã«ãƒ¬ã‚¤ãŒå¢—ãˆã‚‹ï¼‰
+		// ãƒ­ã‚·ã‚¢ãƒ³ãƒ«ãƒ¼ãƒ¬ãƒƒãƒˆã§æ±ºå®šã™ã‚‹ã€‚
 		if (depth > 2) {
-			if (rand01() < probability) { // ”½Ë
+			if (rand01() < probability) { // åå°„
 				return obj.emission + 
 					Multiply(obj.color, radiance(reflection_ray, depth+1) * Re)
 					/ probability
 					/ rossian_roulette_probability;
-			} else { // ‹üÜ
+			} else { // å±ˆæŠ˜
 				return obj.emission + 
 					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr)
 					/ (1.0 - probability) 
 					/ rossian_roulette_probability;
 			}
-		} else { // ‹üÜ‚Æ”½Ë‚Ì—¼•û‚ğ’ÇÕ
+		} else { // å±ˆæŠ˜ã¨åå°„ã®ä¸¡æ–¹ã‚’è¿½è·¡
 			return obj.emission + 
 				Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
 				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / rossian_roulette_probability;
@@ -207,7 +207,7 @@ Color radiance(const Ray &ray, const int depth) {
 }
 
 
-// *** .hdrƒtƒH[ƒ}ƒbƒg‚Åo—Í‚·‚é‚½‚ß‚ÌŠÖ” ***
+// *** .hdrãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã§å‡ºåŠ›ã™ã‚‹ãŸã‚ã®é–¢æ•° ***
 struct HDRPixel {
 	unsigned char r, g, b, e;
 	HDRPixel(const unsigned char r_ = 0, const unsigned char g_ = 0, const unsigned char b_ = 0, const unsigned char e_ = 0) :
@@ -223,7 +223,7 @@ struct HDRPixel {
 
 };
 
-// double‚ÌRGB—v‘f‚ğ.hdrƒtƒH[ƒ}ƒbƒg—p‚É•ÏŠ·
+// doubleã®RGBè¦ç´ ã‚’.hdrãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆç”¨ã«å¤‰æ›
 HDRPixel get_hdr_pixel(const Color &color) {
 	double d = std::max(color.x, std::max(color.y, color.z));
 	if (d <= 1e-32)
@@ -234,22 +234,22 @@ HDRPixel get_hdr_pixel(const Color &color) {
 	return HDRPixel(color.x * d, color.y * d, color.z * d, e + 128);
 }
 
-// ‘‚«o‚µ—pŠÖ”
+// æ›¸ãå‡ºã—ç”¨é–¢æ•°
 void save_hdr_file(std::string &filename, const Color* image, const int width, const int height) {
 	FILE *fp = fopen(filename.c_str(), "wb");
 	if (fp == NULL) {
 		std::cerr << "Error: " << filename << std::endl;
 		return;
 	}
-	// .hdrƒtƒH[ƒ}ƒbƒg‚É]‚Á‚Äƒf[ƒ^‚ğ‘‚«‚¾‚·
-	// ƒwƒbƒ_
+	// .hdrãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã«å¾“ã£ã¦ãƒ‡ãƒ¼ã‚¿ã‚’æ›¸ãã ã™
+	// ãƒ˜ãƒƒãƒ€
 	unsigned char ret = 0x0a;
 	fprintf(fp, "#?RADIANCE%c", (unsigned char)ret);
 	fprintf(fp, "# Made with 100%% pure HDR Shop%c", ret);
 	fprintf(fp, "FORMAT=32-bit_rle_rgbe%c", ret);
 	fprintf(fp, "EXPOSURE=1.0000000000000%c%c", ret, ret);
 
-	// ‹P“x’l‘‚«o‚µ
+	// è¼åº¦å€¤æ›¸ãå‡ºã—
 	fprintf(fp, "-Y %d +X %d%c", height, width, ret);
 	for (int i = height - 1; i >= 0; i --) {
 		std::vector<HDRPixel> line;
@@ -278,9 +278,9 @@ int main(int argc, char **argv) {
 	int height = 480;
 	int samples = 32;
 
-	// ƒJƒƒ‰ˆÊ’u
+	// ã‚«ãƒ¡ãƒ©ä½ç½®
 	Ray camera(Vec(50.0, 52.0, 295.6), Normalize(Vec(0.0, -0.042612, -1.0)));
-	// ƒV[ƒ““à‚Å‚ÌƒXƒNƒŠ[ƒ“‚Ìx,y•ûŒü‚ÌƒxƒNƒgƒ‹
+	// ã‚·ãƒ¼ãƒ³å†…ã§ã®ã‚¹ã‚¯ãƒªãƒ¼ãƒ³ã®x,yæ–¹å‘ã®ãƒ™ã‚¯ãƒˆãƒ«
 	Vec cx = Vec(width * 0.5135 / height);
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color accumulated_radiance;
@@ -294,13 +294,13 @@ int main(int argc, char **argv) {
 			image[image_index] = Color();
 			accumulated_radiance = Color();
 
-			// 2x2‚ÌƒTƒuƒsƒNƒZƒ‹ƒTƒ“ƒvƒŠƒ“ƒO
+			// 2x2ã®ã‚µãƒ–ãƒ”ã‚¯ã‚»ãƒ«ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°
 			for (int sy = 0; sy < 2; sy ++) {
 				for (int sx = 0; sx < 2; sx ++) {
-					// ˆê‚Â‚ÌƒTƒuƒsƒNƒZƒ‹‚ ‚½‚èsamples‰ñƒTƒ“ƒvƒŠƒ“ƒO‚·‚é
+					// ä¸€ã¤ã®ã‚µãƒ–ãƒ”ã‚¯ã‚»ãƒ«ã‚ãŸã‚Šsampleså›ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ã™ã‚‹
 					for (int s = 0; s < samples; s ++) {
-						// ƒeƒ“ƒgƒtƒBƒ‹ƒ^[‚É‚æ‚Á‚ÄƒTƒ“ƒvƒŠƒ“ƒO
-						// ƒsƒNƒZƒ‹”ÍˆÍ‚Åˆê—l‚ÉƒTƒ“ƒvƒŠƒ“ƒO‚·‚é‚Ì‚Å‚Í‚È‚­AƒsƒNƒZƒ‹’†‰›•t‹ß‚ÉƒTƒ“ƒvƒ‹‚ª‚½‚­‚³‚ñW‚Ü‚é‚æ‚¤‚É•Î‚è‚ğ¶‚¶‚³‚¹‚é
+						// ãƒ†ãƒ³ãƒˆãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ã«ã‚ˆã£ã¦ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°
+						// ãƒ”ã‚¯ã‚»ãƒ«ç¯„å›²ã§ä¸€æ§˜ã«ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ã™ã‚‹ã®ã§ã¯ãªãã€ãƒ”ã‚¯ã‚»ãƒ«ä¸­å¤®ä»˜è¿‘ã«ã‚µãƒ³ãƒ—ãƒ«ãŒãŸãã•ã‚“é›†ã¾ã‚‹ã‚ˆã†ã«åã‚Šã‚’ç”Ÿã˜ã•ã›ã‚‹
 						const double r1 = 2.0 * rand01(), dx = r1 < 1.0 ? sqrt(r1) - 1.0 : 1.0 - sqrt(2.0 - r1);
 						const double r2 = 2.0 * rand01(), dy = r2 < 1.0 ? sqrt(r2) - 1.0 : 1.0 - sqrt(2.0 - r2);
 						Vec dir = cx * (((sx + 0.5 + dx) / 2.0 + x) / width - 0.5) +
@@ -315,6 +315,6 @@ int main(int argc, char **argv) {
 		}
 	}
 	
-	// .hdrƒtƒH[ƒ}ƒbƒg‚Åo—Í
+	// .hdrãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã§å‡ºåŠ›
 	save_hdr_file(std::string("image.hdr"), image, width, height);
 }
