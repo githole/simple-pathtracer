@@ -137,7 +137,6 @@ Color radiance(const Ray &ray, const int depth) {
 			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
 		v = Cross(w, u);
 		// コサイン項を使った重点的サンプリング
-		/*
 		const double r1 = 2 * PI * rand01();
 		const double r2 = rand01(), r2s = sqrt(r2);
 		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
@@ -147,10 +146,6 @@ Color radiance(const Ray &ray, const int depth) {
 		// Diffuse面のBRDF = 1/πなので、これらを代入すると Le + Li(ray) となる。
 		// これにロシアンルーレットの確率を除算したものが最終的な計算式になる。
 		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / rossian_roulette_probability;
-		*/
-
-
-
 	} break;
 	case SPECULAR: {
 		// 完全鏡面なのでレイの反射方向は決定的。
