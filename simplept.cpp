@@ -230,7 +230,7 @@ HDRPixel get_hdr_pixel(const Color &color) {
 }
 
 // 書き出し用関数
-void save_hdr_file(std::string &filename, const Color* image, const int width, const int height) {
+void save_hdr_file(const std::string &filename, const Color* image, const int width, const int height) {
 	FILE *fp = fopen(filename.c_str(), "wb");
 	if (fp == NULL) {
 		std::cerr << "Error: " << filename << std::endl;
