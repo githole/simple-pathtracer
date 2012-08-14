@@ -86,7 +86,7 @@ Sphere spheres[] = {
 	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 天井
 	Sphere(16.5,Vec(27,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// 鏡
 	Sphere(16.5,Vec(73,16.5,78),       Color(), Color(1,1,1)*.99, REFRACTION),//ガラス
-	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(6,6,6), Color(), DIFFUSE),//照明
+	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(12,12,12), Color(), DIFFUSE),//照明
 };
 
 // *** レンダリング用関数 ***
@@ -278,7 +278,6 @@ int main(int argc, char **argv) {
 	// シーン内でのスクリーンのx,y方向のベクトル
 	Vec cx = Vec(width * 0.5135 / height);
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
-	Color accumulated_radiance;
 	Color *image = new Color[width * height];
 
 	for (int y = 0; y < height; y ++) {
@@ -287,11 +286,11 @@ int main(int argc, char **argv) {
 		for (int x = 0; x < width; x ++) {
 			int image_index = y * width + x;	
 			image[image_index] = Color();
-			accumulated_radiance = Color();
 
 			// 2x2のサブピクセルサンプリング
 			for (int sy = 0; sy < 2; sy ++) {
 				for (int sx = 0; sx < 2; sx ++) {
+					Color accumulated_radiance = Color();
 					// 一つのサブピクセルあたりsamples回サンプリングする
 					for (int s = 0; s < samples; s ++) {
 						// テントフィルターによってサンプリング
@@ -303,7 +302,6 @@ int main(int argc, char **argv) {
 						accumulated_radiance = accumulated_radiance + 
 							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0) / samples;
 					}
-					
 					image[image_index] = image[image_index] + accumulated_radiance;
 				}
 			}
