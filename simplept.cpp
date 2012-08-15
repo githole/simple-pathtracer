@@ -106,98 +106,127 @@ inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 }
 
 // ray方向からの放射輝度を求める
-Color radiance(const Ray &ray, const int depth) {
-	double t; // レイからシーンの交差位置までの距離
-	int id;   // 交差したシーン内オブジェクトのID
-	if (!intersect_scene(ray, &t, &id))
-		return BackgroundColor;
+// 非再帰版
+Color radiance(const Ray &ray, int depth) {
 
-	const Sphere &obj = spheres[id];
-	const Vec hitpoint = ray.org + t * ray.dir; // 交差位置
-	const Vec normal  = Normalize(hitpoint - obj.position); // 交差位置の法線
-	const Vec orienting_normal = Dot(normal, ray.dir) < 0.0 ? normal : (-1.0 * normal); // 交差位置の法線（物体からのレイの入出を考慮）
-	// 色の反射率最大のものを得る。ロシアンルーレットで使う。
-	// ロシアンルーレットの閾値は任意だが色の反射率等を使うとより良い。
-	double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
-	// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
-	if (depth > MaxDepth) {
-		if (rand01() >= russian_roulette_probability)
-			return obj.emission;
-	} else
-		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
+	// ※以下smallptのサイトのforward.cppより
+	// 最終的に求めたい放射輝度がL0
+	// L0 = Le0 + f0*(L1) <- これはいわゆるレンダリング方程式。パストレなのでf0 = brdf * cosθ / pdf(ω)になる。
+	//    = Le0 + f0*(Le1 + f1*L2) <- L1 は周囲からもたらされた放射輝度なので再帰的に展開
+	//    = Le0 + f0*(Le1 + f1*(Le2 + f2*(L3)) <- もっと展開
+	//    = Le0 + f0*(Le1 + f1*(Le2 + f2*(Le3 + f3*(L4))) <- もっともっと展開
+	//    = ...
+	//    = Le0 + f0*Le1 + f0*f1*Le2 + f0*f1*f2*Le3 + f0*f1*f2*f3*Le4 + ... <- 上で展開した式を変形するとこうなる
+	// 
+	// というわけで、L0を求める新しい式が得られたのでこれを使う
+	// F = 1
+	// while (1){
+	//   L += F*Lei
+	//   F *= fi
+	// }
+	// 上プログラムを実行すると
+	// L += Le0, F *= f0
+	// L += F * Le1 (L += f0 * Le1), F *= f1
+	// L += F * Le2 (L += f0 * f1 * Le2), F *= f2
+	// ...
+	// となり、このときLは上で求めたL0に一致する。
 
-	switch (obj.ref_type) {
-	case DIFFUSE: {
-		// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
-		Vec w, u, v;
-		w = orienting_normal;
-		if (fabs(w.x) > 0.1)
-			u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
-		else
-			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
-		v = Cross(w, u);
-		// コサイン項を使った重点的サンプリング
-		const double r1 = 2 * PI * rand01();
-		const double r2 = rand01(), r2s = sqrt(r2);
-		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
+	// それぞれ上でいうところのLとFに相当
+	Color accumulated_color;
+	Color accumulated_reflectance(1.0, 1.0, 1.0);
 
-		// レンダリング方程式に従えば Le + Li(ray) * BRDF * cosθ / pdf(ray) になる。
-		// ただし、上でコサイン項による重点的サンプリングをしたためpdf(ray) = cosθ/πになり、
-		// Diffuse面のBRDF = 1/πなので、これらを代入すると Le + Li(ray) となる。
-		// これにロシアンルーレットの確率を除算したものが最終的な計算式になる。
-		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / russian_roulette_probability;
-	} break;
-	case SPECULAR: {
-		// 完全鏡面なのでレイの反射方向は決定的。
-		// ロシアンルーレットの確率で除算するのは上と同じ。
-		return obj.emission + Multiply(obj.color,
-			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / russian_roulette_probability;
-	} break;
-	case REFRACTION: {
-		Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
-		bool into = Dot(normal, orienting_normal) > 0.0; // レイがオブジェクトから出るのか、入るのか
+	// 現在のレイを保存しておく
+	Ray now_ray(ray.org, ray.dir);
+	for (;; depth ++) {
+		double t; // レイからシーンの交差位置までの距離
+		int id;   // 交差したシーン内オブジェクトのID
+		if (!intersect_scene(now_ray, &t, &id))
+			return accumulated_color;
 
-		// Snellの法則
-		const double nc = 1.0; // 真空の屈折率
-		const double nt = 1.5; // オブジェクトの屈折率
-		const double nnt = into ? nc / nt : nt / nc;
-		const double ddn = Dot(ray.dir, orienting_normal);
-		const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
-		
-		if (cos2t < 0.0) { // 全反射した
-			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / russian_roulette_probability;
-		}
-		// 屈折していく方向
-		Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
+		const Sphere &obj = spheres[id];
+		const Vec hitpoint = now_ray.org + t * now_ray.dir; // 交差位置
+		const Vec normal  = Normalize(hitpoint - obj.position); // 交差位置の法線
+		const Vec orienting_normal = Dot(normal, now_ray.dir) < 0.0 ? normal : (-1.0 * normal); // 交差位置の法線（物体からのレイの入出を考慮）
 
-		// SchlickによるFresnelの反射係数の近似
-		const double a = nt - nc, b = nt + nc;
-		const double R0 = (a * a) / (b * b);
-		const double c = 1.0 - (into ? -ddn : Dot(tdir, normal));
-		const double Re = R0 + (1.0 - R0) * pow(c, 5.0);
-		const double Tr = 1.0 - Re; // 屈折光の運ぶ光の量
-		const double probability  = 0.25 + 0.5 * Re;
+		accumulated_color = accumulated_color + Multiply(accumulated_reflectance, obj.emission);
 
-		// 一定以上レイを追跡したら屈折と反射のどちらか一方を追跡する。（さもないと指数的にレイが増える）
-		// ロシアンルーレットで決定する。
-		if (depth > 2) {
-			if (rand01() < probability) { // 反射
-				return obj.emission + 
-					Multiply(obj.color, radiance(reflection_ray, depth+1) * Re)
-					/ probability
-					/ russian_roulette_probability;
-			} else { // 屈折
-				return obj.emission + 
-					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr)
-					/ (1.0 - probability) 
-					/ russian_roulette_probability;
+		// 色の反射率最大のものを得る。ロシアンルーレットで使う。
+		// ロシアンルーレットの閾値は任意だが色の反射率等を使うとより良い。
+		double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
+		// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
+		if (depth > MaxDepth) {
+			if (rand01() >= russian_roulette_probability) {
+				return accumulated_color;
 			}
-		} else { // 屈折と反射の両方を追跡
-			return obj.emission + 
-				Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
-				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / russian_roulette_probability;
+		} else
+			russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
+		
+		switch (obj.ref_type) {
+		case DIFFUSE: {
+			// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
+			Vec w, u, v;
+			w = orienting_normal;
+			if (fabs(w.x) > 0.1)
+				u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
+			else
+				u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
+			v = Cross(w, u);
+			// コサイン項を使った重点的サンプリング
+			const double r1 = 2 * PI * rand01();
+			const double r2 = rand01(), r2s = sqrt(r2);
+			Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
+
+			now_ray = Ray(hitpoint, dir);
+			// F *= fi の部分。
+			accumulated_reflectance = Multiply(accumulated_reflectance, obj.color) / russian_roulette_probability;
+			continue;
+		} break;
+		case SPECULAR: {
+			// 完全鏡面なのでレイの反射方向は決定的。
+			now_ray = Ray(hitpoint, now_ray.dir - normal * 2.0 * Dot(normal, now_ray.dir));
+			accumulated_reflectance = Multiply(accumulated_reflectance, obj.color) / russian_roulette_probability;
+			continue;
+		} break;
+		case REFRACTION: {
+			Ray reflection_ray = Ray(hitpoint, now_ray.dir - normal * 2.0 * Dot(normal, now_ray.dir));
+			bool into = Dot(normal, orienting_normal) > 0.0; // レイがオブジェクトから出るのか、入るのか
+
+			// Snellの法則
+			const double nc = 1.0; // 真空の屈折率
+			const double nt = 1.5; // オブジェクトの屈折率
+			const double nnt = into ? nc / nt : nt / nc;
+			const double ddn = Dot(now_ray.dir, orienting_normal);
+			const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
+		
+			if (cos2t < 0.0) { // 全反射した
+				now_ray = reflection_ray;
+				accumulated_reflectance = Multiply(accumulated_reflectance, obj.color) / russian_roulette_probability;
+				continue;
+			}
+			// 屈折していく方向
+			Vec tdir = Normalize(now_ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
+
+			// SchlickによるFresnelの反射係数の近似
+			const double a = nt - nc, b = nt + nc;
+			const double R0 = (a * a) / (b * b);
+			const double c = 1.0 - (into ? -ddn : Dot(tdir, normal));
+			const double Re = R0 + (1.0 - R0) * pow(c, 5.0);
+			const double Tr = 1.0 - Re; // 屈折光の運ぶ光の量
+			const double probability  = 0.25 + 0.5 * Re;
+
+			// 屈折と反射のどちらか一方を追跡する。（さもないと指数的にレイが増える）
+			// ロシアンルーレットで決定する。
+			if (rand01() < probability) { // 反射
+				now_ray = reflection_ray;
+				accumulated_reflectance = Multiply(accumulated_reflectance, obj.color) * Re / probability / russian_roulette_probability;
+				continue;
+			} else { // 屈折
+				now_ray = Ray(hitpoint, tdir);
+				accumulated_reflectance = Multiply(accumulated_reflectance, obj.color) * Tr / (1.0 - probability)  / russian_roulette_probability;
+				continue;
+			}
+		} break;
 		}
-	} break;
 	}
 }
 
@@ -271,7 +300,7 @@ void save_hdr_file(const std::string &filename, const Color* image, const int wi
 int main(int argc, char **argv) {
 	int width = 640;
 	int height = 480;
-	int samples = 32;
+	int samples = 64;
 
 	// カメラ位置
 	Ray camera(Vec(50.0, 52.0, 295.6), Normalize(Vec(0.0, -0.042612, -1.0)));
@@ -279,7 +308,7 @@ int main(int argc, char **argv) {
 	Vec cx = Vec(width * 0.5135 / height);
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
-
+	
 	for (int y = 0; y < height; y ++) {
 		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
 		srand(y * y * y);
