@@ -118,13 +118,13 @@ Color radiance(const Ray &ray, const int depth) {
 	const Vec orienting_normal = Dot(normal, ray.dir) < 0.0 ? normal : (-1.0 * normal); // 交差位置の法線（物体からのレイの入出を考慮）
 	// 色の反射率最大のものを得る。ロシアンルーレットで使う。
 	// ロシアンルーレットの閾値は任意だが色の反射率等を使うとより良い。
-	double rossian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
+	double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
 	// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
 	if (depth > MaxDepth) {
-		if (rand01() >= rossian_roulette_probability)
+		if (rand01() >= russian_roulette_probability)
 			return obj.emission;
 	} else
-		rossian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
+		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
 
 	switch (obj.ref_type) {
 	case DIFFUSE: {
@@ -145,13 +145,13 @@ Color radiance(const Ray &ray, const int depth) {
 		// ただし、上でコサイン項による重点的サンプリングをしたためpdf(ray) = cosθ/πになり、
 		// Diffuse面のBRDF = 1/πなので、これらを代入すると Le + Li(ray) となる。
 		// これにロシアンルーレットの確率を除算したものが最終的な計算式になる。
-		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / rossian_roulette_probability;
+		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / russian_roulette_probability;
 	} break;
 	case SPECULAR: {
 		// 完全鏡面なのでレイの反射方向は決定的。
 		// ロシアンルーレットの確率で除算するのは上と同じ。
 		return obj.emission + Multiply(obj.color,
-			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / rossian_roulette_probability;
+			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / russian_roulette_probability;
 	} break;
 	case REFRACTION: {
 		Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
@@ -165,7 +165,7 @@ Color radiance(const Ray &ray, const int depth) {
 		const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
 		
 		if (cos2t < 0.0) { // 全反射した
-			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / rossian_roulette_probability;
+			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / russian_roulette_probability;
 		}
 		// 屈折していく方向
 		Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
@@ -185,17 +185,17 @@ Color radiance(const Ray &ray, const int depth) {
 				return obj.emission + 
 					Multiply(obj.color, radiance(reflection_ray, depth+1) * Re)
 					/ probability
-					/ rossian_roulette_probability;
+					/ russian_roulette_probability;
 			} else { // 屈折
 				return obj.emission + 
 					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr)
 					/ (1.0 - probability) 
-					/ rossian_roulette_probability;
+					/ russian_roulette_probability;
 			}
 		} else { // 屈折と反射の両方を追跡
 			return obj.emission + 
 				Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
-				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / rossian_roulette_probability;
+				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / russian_roulette_probability;
 		}
 	} break;
 	}
