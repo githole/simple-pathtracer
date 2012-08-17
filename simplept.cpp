@@ -12,8 +12,6 @@ const double EPS = 1e-6;
 const double MaxDepth = 5;
 
 // *** その他の関数 ***
-inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; } 
-inline int toInt(double x){ return int(pow(clamp(x),1/2.2)*255+.5); } 
 inline double rand01() { return (double)rand()/RAND_MAX; }
 
 // *** データ構造 ***
@@ -52,7 +50,7 @@ enum ReflectionType {
 	SPECULAR,   // 理想的な鏡面。
 	REFRACTION, // 理想的なガラス的物質。
 
-	SSS, /// なんか適当
+	GLOSSY, // Wardのグロシー
 };
 
 struct Sphere {
@@ -86,10 +84,10 @@ Sphere spheres[] = {
 	Sphere(1e5, Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// 手前
 	Sphere(1e5, Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 床
 	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 天井
-	Sphere(16.5,Vec(32,16.5,57),       Color(), Color(0.25, 0.75, 0.25), SSS),// 鏡
-	Sphere(16.5,Vec(73,16.5,88),       Color(), Color(0.25, 0.75, 0.5), DIFFUSE),//ガラス
-	Sphere(10.0,Vec(25,10.0,100),       Color(), Color(0.75, 0.75, 0.75), DIFFUSE),//ガラス
-	Sphere(5.0, Vec(50.0, 10.0, 11.6),Color(12,12,12), Color(), DIFFUSE),//照明
+	Sphere(16.5,Vec(50,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// 鏡
+	Sphere(16.5,Vec(20,16.5,70),       Color(), Color(1,1,1)*.99, GLOSSY), // グロッシーな物体
+	Sphere(16.5,Vec(80,16.5,78),       Color(), Color(1,1,1)*.99, GLOSSY), // グロッシーな物体
+	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(12,12,12), Color(), DIFFUSE), //照明
 };
 
 // *** レンダリング用関数 ***
@@ -107,72 +105,7 @@ inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 	}
 	return *t < INF;
 }
-Color radiance(const Ray &ray, const int depth);
 
-Color radiance_through_media(const Ray &ray, const int depth, const int in_object = -1) {
-	/*
-	const double scattering = 0.999;
-	const double absorbing = 0.001;
-	const double transmittance = scattering + absorbing;
-	*/
-
-//		const Vec scattering(0.9, 0.999, 0.9);
-	const Vec scattering(0.7, 0.7, 0.7);
-	const Vec absorbing(0.9, 0.001, 0.9);
-	const Vec transmittance = scattering + absorbing;
-	const double phase = 1.0 / (4.0 * PI);
-
-	const double tr_average = (transmittance.x + transmittance.y + transmittance.z) / 3;
-	const double sc_average = (scattering.x + scattering.y +	scattering.z) / 3;
-
-	const double scattering_albedo = sc_average / tr_average;
-
-	double russian_roulette_probability = std::min(0.9, scattering_albedo);
-	if (depth > MaxDepth * 10) {
-		if (rand01() >= russian_roulette_probability)
-			return spheres[in_object].emission;
-	} else
-		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
-	
-	double t; // レイからシーンの交差位置までの距離
-	int id;   // 交差したシーン内オブジェクトのID
-	if (!intersect_scene(ray, &t, &id)) {
-		// 絶対ここには入らないはず
-		return BackgroundColor;
-	}
-	const Vec hitpoint = ray.org + t * ray.dir; // 交差位置
-
-	Color Li, L;
-	
-	const double probability = 0.1;
-	if (rand01() < probability) {
-		double d = 0.0;
-		do {
-			d = -log(rand01()) / tr_average;
-		} while (d >= t);
-
-		// 等方散乱
-		const double r1 = 2 * PI * rand01();
-		const double r2 = 1.0 - 2.0 * rand01() ;
-		const Ray next_ray(ray.org + d * ray.dir, Vec(sqrt(1.0 - r2*r2) * cos(r1), sqrt(1.0 - r2*r2) * sin(r1), r2));
-	
-		const Vec Tr = Vec(exp(-transmittance.x * d), exp(-transmittance.y * d), exp(-transmittance.z * d));
-		Li = Multiply(Tr, Multiply(scattering, radiance_through_media(next_ray, depth+1, in_object))) 
-			* phase
-			/ exp(-tr_average * d)
-			/ (1.0 / (4.0 * PI)) 
-			/ probability
-			/ russian_roulette_probability;
-
-		return Li;
-	} else {
-		const Vec Tr = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
-		L = Multiply(Tr, radiance(Ray(hitpoint, ray.dir), 0)) 
-			/ probability
-			/ russian_roulette_probability;
-		return L;
-	}
-}
 // ray方向からの放射輝度を求める
 Color radiance(const Ray &ray, const int depth) {
 	double t; // レイからシーンの交差位置までの距離
@@ -188,7 +121,6 @@ Color radiance(const Ray &ray, const int depth) {
 	// ロシアンルーレットの閾値は任意だが色の反射率等を使うとより良い。
 	double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
 	// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
-
 	if (depth > MaxDepth) {
 		if (rand01() >= russian_roulette_probability)
 			return obj.emission;
@@ -196,7 +128,27 @@ Color radiance(const Ray &ray, const int depth) {
 		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
 
 	switch (obj.ref_type) {
-	case SSS: {
+
+	// WardのモデルによるグロシーなBRDF
+	case GLOSSY: {
+
+		// 各種パラメータ。
+		// 決め方がださいね。
+		const double lo_s = 0.75;
+		double alpha_x, alpha_y;
+		if (id == 7) {
+			alpha_x = 0.75;
+			alpha_y = 0.75;
+		} else {
+			alpha_x = 0.25;
+			alpha_y = 0.25;
+		}
+
+		const Vec in = -1.0 * ray.dir;
+		Vec halfv;
+		Vec dir;
+		
+		// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
 		Vec w, u, v;
 		w = orienting_normal;
 		if (fabs(w.x) > 0.1)
@@ -204,30 +156,32 @@ Color radiance(const Ray &ray, const int depth) {
 		else
 			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
 		v = Cross(w, u);
-		// コサイン項を使った重点的サンプリング
-		const double r1 = 2 * PI * rand01();
-		const double r2 = rand01(), r2s = sqrt(r2);
-		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
 
-		if (depth < 2) {
-			// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
+		// 重点サンプリングする。ただし、生成されるハーフベクトルしだいでは
+		// 反射方向が半球外に出てしまうのでそういう場合は棄却する。
+		do {
+			const double u1 = rand01();
+			const double u2 = rand01();
+			double phi = atan(alpha_y / alpha_x * tan(2.0 * PI * u2));
+			if (0.25 <= u2 && u2 <= 0.75)
+				phi += PI;
+			else if (0.75 < u2)
+				phi += 2.0 * PI;
+			const double theta = atan(sqrt(-log(u1) / (pow(cos(theta), 2) / pow(alpha_x, 2) + pow(sin(theta), 2) / pow(alpha_y, 2))));
 
-			return 
-				(Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) * 0.5 +
-				radiance_through_media(Ray(hitpoint, ray.dir), 0, id) * 0.5) / russian_roulette_probability;
-		} else {
-			const double probability = 0.5;
-			if (rand01() < probability) {
-				return Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) * 0.5
-						/ probability
-						/ russian_roulette_probability;
-			} else {
-				return radiance_through_media(Ray(hitpoint, ray.dir), 0, id) * 0.5
-						/ probability
-						/ russian_roulette_probability;
-			}
-		}
+			halfv = Normalize((u * cos(phi) * sin(theta) + v * sin(phi) * sin(theta) + w * cos(theta)));
+			dir = 2.0 * Dot(in, halfv) * halfv - in;
+		} while (Dot(orienting_normal, dir) < 0.0);
+
+		// 重み。brdf * cosθ / pdf(ω)をまとめたものになっている。
+		const double weight = lo_s * Dot(halfv, in) * pow(Dot(halfv, orienting_normal), 3) * 
+			sqrt(Dot(dir, orienting_normal) / Dot(in, orienting_normal));
+		
+		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1))
+			* weight
+			/ russian_roulette_probability;
 	} break;
+
 
 	case DIFFUSE: {
 		// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
@@ -373,7 +327,7 @@ void save_hdr_file(const std::string &filename, const Color* image, const int wi
 int main(int argc, char **argv) {
 	int width = 640;
 	int height = 480;
-	int samples = 1000 / 4;
+	int samples = 16;
 
 	// カメラ位置
 	Ray camera(Vec(50.0, 52.0, 295.6), Normalize(Vec(0.0, -0.042612, -1.0)));
@@ -381,11 +335,10 @@ int main(int argc, char **argv) {
 	Vec cx = Vec(width * 0.5135 / height);
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
-	 
- #pragma omp parallel for schedule(dynamic, 1)
+	
+#pragma omp parallel for schedule(dynamic, 1)
 	for (int y = 0; y < height; y ++) {
-		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
-		srand(y * y * y);			
+		int used_sample = 0;
 		for (int x = 0; x < width; x ++) {
 			int image_index = y * width + x;	
 			image[image_index] = Color();
@@ -394,6 +347,7 @@ int main(int argc, char **argv) {
 			for (int sy = 0; sy < 2; sy ++) {
 				for (int sx = 0; sx < 2; sx ++) {
 					Color accumulated_radiance = Color();
+
 					// 一つのサブピクセルあたりsamples回サンプリングする
 					for (int s = 0; s < samples; s ++) {
 						// テントフィルターによってサンプリング
@@ -405,10 +359,12 @@ int main(int argc, char **argv) {
 						accumulated_radiance = accumulated_radiance + 
 							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0) / samples;
 					}
+					
 					image[image_index] = image[image_index] + accumulated_radiance;
 				}
 			}
 		}
+		std::cerr << "Rendering (average: " << ((double)used_sample / width) << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
 	}
 	
 	// .hdrフォーマットで出力
