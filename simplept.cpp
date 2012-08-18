@@ -223,7 +223,7 @@ Color radiance(const Ray &ray, const int depth) {
 						/ russian_roulette_probability;
 			} else {
 				return radiance_through_media(Ray(hitpoint, ray.dir), 0, id) * 0.5
-						/ probability
+						/ (1.0 - probability)
 						/ russian_roulette_probability;
 			}
 		}
