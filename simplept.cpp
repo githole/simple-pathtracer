@@ -9,11 +9,9 @@
 const double PI = 3.14159265358979323846;
 const double INF = 1e20;
 const double EPS = 1e-6;
-const double MaxDepth = 5;
+const double MaxDepth = 50;
 
 // *** その他の関数 ***
-inline double clamp(double x){ return x<0 ? 0 : x>1 ? 1 : x; } 
-inline int toInt(double x){ return int(pow(clamp(x),1/2.2)*255+.5); } 
 inline double rand01() { return (double)rand()/RAND_MAX; }
 
 // *** データ構造 ***
@@ -51,8 +49,6 @@ enum ReflectionType {
 	DIFFUSE,    // 完全拡散面。いわゆるLambertian面。
 	SPECULAR,   // 理想的な鏡面。
 	REFRACTION, // 理想的なガラス的物質。
-
-	SSS, /// なんか適当
 };
 
 struct Sphere {
@@ -80,17 +76,17 @@ struct Sphere {
 // *** レンダリングするシーンデータ ****
 // from small ppt
 Sphere spheres[] = {
-	Sphere(1e5, Vec( 1e5+1,40.8,81.6), Color(), Color(0.75, 0.25, 0.25),DIFFUSE),// 左
-	Sphere(1e5, Vec(-1e5+99,40.8,81.6),Color(), Color(0.25, 0.25, 0.75),DIFFUSE),// 右
-	Sphere(1e5, Vec(50,40.8, 1e5),     Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 奥
-	Sphere(1e5, Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// 手前
-	Sphere(1e5, Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 床
-	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 天井
-	Sphere(16.5,Vec(32,16.5,57),       Color(), Color(0.25, 0.75, 0.25), SSS),// 鏡
-	Sphere(16.5,Vec(73,16.5,88),       Color(), Color(0.25, 0.75, 0.5), DIFFUSE),//ガラス
-	Sphere(10.0,Vec(25,10.0,100),       Color(), Color(0.75, 0.75, 0.75), DIFFUSE),//ガラス
-	Sphere(5.0, Vec(50.0, 10.0, 11.6),Color(12,12,12), Color(), DIFFUSE),//照明
+	Sphere(0.1 * 5.0, 0.1 * Vec(50.0, 75.0, 81.6),Color(12,12,12), Color(), DIFFUSE),//照明
+	Sphere(0.1 * 1e5, 0.1 * Vec( 1e5+1,40.8,81.6), Color(), Color(0.75, 0.25, 0.25),DIFFUSE),// 左
+	Sphere(0.1 * 1e5, 0.1 * Vec(-1e5+99,40.8,81.6),Color(), Color(0.25, 0.25, 0.75),DIFFUSE),// 右
+	Sphere(0.1 * 1e5, 0.1 * Vec(50,40.8, 1e5),     Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 奥
+	Sphere(0.1 * 1e5, 0.1 * Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// 手前
+	Sphere(0.1 * 1e5, 0.1 * Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 床
+	Sphere(0.1 * 1e5, 0.1 * Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 天井
+	Sphere(0.1 * 16.5,0.1 * Vec(27,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// 鏡
+	Sphere(0.1 * 16.5,0.1 * Vec(73,16.5,78),       Color(), Color(0.25, 0.75, 0.25), DIFFUSE),//ガラス
 };
+const int LightID = 0;
 
 // *** レンダリング用関数 ***
 // シーンとの交差判定関数
@@ -107,73 +103,87 @@ inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 	}
 	return *t < INF;
 }
-Color radiance(const Ray &ray, const int depth);
 
-Color radiance_through_media(const Ray &ray, const int depth, const int in_object = -1) {
-	/*
-	const double scattering = 0.999;
-	const double absorbing = 0.001;
-	const double transmittance = scattering + absorbing;
-	*/
 
-//		const Vec scattering(0.9, 0.999, 0.9);
-	const Vec scattering(0.7, 0.7, 0.7);
-	const Vec absorbing(0.9, 0.001, 0.9);
-	const Vec transmittance = scattering + absorbing;
-	const double phase = 1.0 / (4.0 * PI);
+// 以下、シーンを満たす関与媒質のパラメータ
+const Vec scattering(0.25, 0.25, 0.25); // σs
+const Vec absorbing(0.01, 0.01, 0.01);  // σa
 
-	const double tr_average = (transmittance.x + transmittance.y + transmittance.z) / 3;
-	const double sc_average = (scattering.x + scattering.y +	scattering.z) / 3;
+const Vec transmittance = scattering + absorbing; // σt
+const double phase = 1.0 / (4.0 * PI); // 等方散乱
+const double tr_average = (transmittance.x + transmittance.y + transmittance.z) / 3; // Scattering albedoの計算で使う
+const double sc_average = (scattering.x + scattering.y +	scattering.z) / 3;       // ロシアンルーレットで使う
+const double scattering_albedo = sc_average / tr_average; // Scattering albedo。相互作用したときの、散乱の確率
 
-	const double scattering_albedo = sc_average / tr_average;
+// 以下、直接光の計算関数。ただし媒質による減衰を考慮する。
+// 指定した位置への直接光を計算する
+Color direct_radiance(const Vec &v0, const Vec &normal, const int id, const Vec &light_pos) {
+	const Vec light_normal  = Normalize(light_pos - spheres[LightID].position);
+	const Vec light_dir = Normalize(light_pos - v0);
+	const double dist2 = (light_pos - v0).LengthSquared();
+	const double dot0 = Dot(normal, light_dir);
+	const double dot1 = Dot(light_normal, -1.0 * light_dir);
 
-	double russian_roulette_probability = std::min(0.9, scattering_albedo);
-	if (depth > MaxDepth * 10) {
-		if (rand01() >= russian_roulette_probability)
-			return spheres[in_object].emission;
-	} else
-		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
-	
-	double t; // レイからシーンの交差位置までの距離
-	int id;   // 交差したシーン内オブジェクトのID
-	if (!intersect_scene(ray, &t, &id)) {
-		// 絶対ここには入らないはず
-		return BackgroundColor;
+	if (dot0 >= 0 && dot1 >= 0) {
+		const double G = dot0 * dot1 / dist2;
+		double t; // レイからシーンの交差位置までの距離
+		int id_;   // 交差したシーン内オブジェクトのID
+		intersect_scene(Ray(v0, light_dir), &t, &id_);
+		if (fabs(sqrt(dist2) - t) < 1e-3) {		
+			return Multiply(spheres[id].color, spheres[LightID].emission) * (1.0 / PI) * G / (1.0 / (4.0 * PI * pow(spheres[LightID].radius, 2.0)));
+		}
 	}
-	const Vec hitpoint = ray.org + t * ray.dir; // 交差位置
-
-	Color Li, L;
-	
-	const double probability = 0.1;
-	if (rand01() < probability) {
-		double d = 0.0;
-		do {
-			d = -log(rand01()) / tr_average;
-		} while (d >= t);
-
-		// 等方散乱
-		const double r1 = 2 * PI * rand01();
-		const double r2 = 1.0 - 2.0 * rand01() ;
-		const Ray next_ray(ray.org + d * ray.dir, Vec(sqrt(1.0 - r2*r2) * cos(r1), sqrt(1.0 - r2*r2) * sin(r1), r2));
-	
-		const Vec Tr = Vec(exp(-transmittance.x * d), exp(-transmittance.y * d), exp(-transmittance.z * d));
-		Li = Multiply(Tr, Multiply(scattering, radiance_through_media(next_ray, depth+1, in_object))) 
-			* phase
-			/ exp(-tr_average * d)
-			/ (1.0 / (4.0 * PI)) 
-			/ probability
-			/ russian_roulette_probability;
-
-		return Li;
-	} else {
-		const Vec Tr = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
-		L = Multiply(Tr, radiance(Ray(hitpoint, ray.dir), 0)) 
-			/ probability
-			/ russian_roulette_probability;
-		return L;
-	}
+	return Color();
 }
+
+// 光源上の点をサンプリングして直接光を計算する。
+Color direct_radiance_sample(const Vec &v0, const Vec &normal, const int id) {
+	// 光源上の一点をサンプリングする
+	const double r1 = 2 * PI * rand01();
+	const double r2 = 1.0 - 2.0 * rand01();
+	const Vec light_pos = spheres[LightID].position + ((spheres[LightID].radius + EPS) * Vec(sqrt(1.0 - r2*r2) * cos(r1), sqrt(1.0 - r2*r2) * sin(r1), r2));
+	const double t = (v0 - light_pos).Length();
+	const Vec transmittance_ratio = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
+
+	return Multiply(transmittance_ratio, direct_radiance(v0, normal, id, light_pos));
+}
+
+// 指定した位置への直接光を計算する。ただし、空間中の点が光を受ける。
+Color direct_radiance_media(const Vec &v0,  const Vec &light_pos) {
+	const Vec light_normal  = Normalize(light_pos - spheres[LightID].position);
+	const Vec light_dir = Normalize(light_pos - v0);
+	const double dist2 = (light_pos - v0).LengthSquared();
+	const double dot1 = Dot(light_normal, -1.0 * light_dir);
+
+	if (dot1 >= 0) {
+		const double G = dot1 / dist2;
+		double t; // レイからシーンの交差位置までの距離
+		int id_;   // 交差したシーン内オブジェクトのID
+		intersect_scene(Ray(v0, light_dir), &t, &id_);
+		if (fabs(sqrt(dist2) - t) < 1e-3) {		
+			const Vec ret = spheres[LightID].emission * (1.0 / PI) * G / (1.0 / (4.0 * PI * pow(spheres[LightID].radius, 2.0)));
+			return ret;
+		}
+	}
+	return Color();
+}
+
+// 光源上の点をサンプリングして直接光を計算する。ただし、空間中の点が光を受ける。
+Color direct_radiance_sample_media(const Vec &v0) {
+	// 光源上の一点をサンプリングする
+	const double r1 = 2 * PI * rand01();
+	const double r2 = 1.0 - 2.0 * rand01();
+	const Vec light_pos = spheres[LightID].position + ((spheres[LightID].radius + EPS) * Vec(sqrt(1.0 - r2*r2) * cos(r1), sqrt(1.0 - r2*r2) * sin(r1), r2));
+	const double t = (v0 - light_pos).Length();
+	const Vec transmittance_ratio = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
+	
+	const Color direct_light = direct_radiance_media(v0, light_pos);
+	
+	return Multiply(transmittance_ratio, direct_light);
+}
+
 // ray方向からの放射輝度を求める
+// ボリュームレンダリング方程式に基づく
 Color radiance(const Ray &ray, const int depth) {
 	double t; // レイからシーンの交差位置までの距離
 	int id;   // 交差したシーン内オブジェクトのID
@@ -188,118 +198,147 @@ Color radiance(const Ray &ray, const int depth) {
 	// ロシアンルーレットの閾値は任意だが色の反射率等を使うとより良い。
 	double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
 	// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
-
 	if (depth > MaxDepth) {
 		if (rand01() >= russian_roulette_probability)
 			return obj.emission;
 	} else
 		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
 
-	switch (obj.ref_type) {
-	case SSS: {
-		Vec w, u, v;
-		w = orienting_normal;
-		if (fabs(w.x) > 0.1)
-			u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
-		else
-			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
-		v = Cross(w, u);
-		// コサイン項を使った重点的サンプリング
+	// レイと物体の交差点からの放射輝度を計算するか、途中の点における周囲からの影響を計算するかを選択するロシアンルーレット
+	double scattering_probability = std::min(0.9, sc_average);
+	if (scattering_probability < 0.1)
+		scattering_probability = 0.1;
+
+	if (rand01() < scattering_probability) { // 周囲からの影響を考慮（つまりまわりから来た光が散乱してray方向に来た）
+		// 棄却サンプリングによってどこまで光が進行するかを得る
+		double d = 0.0;
+		do {
+			d = -log(rand01()) / tr_average;
+		} while (d > t);
+
+		// 等方散乱
 		const double r1 = 2 * PI * rand01();
-		const double r2 = rand01(), r2s = sqrt(r2);
-		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
+		const double r2 = 1.0 - 2.0 * rand01() ;
+		const Ray next_ray(ray.org + d * ray.dir, Vec(sqrt(1.0 - r2*r2) * cos(r1), sqrt(1.0 - r2*r2) * sin(r1), r2));
+		const Vec transmittance_ratio = Vec(exp(-transmittance.x * d), exp(-transmittance.y * d), exp(-transmittance.z * d));
+		const Vec direct_light = direct_radiance_sample_media(next_ray.org);
 
-		if (depth < 2) {
-			// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
+		// 若干計算間違っているかもしれない・・・
+		return Multiply(transmittance_ratio, Multiply(scattering, direct_light + radiance(next_ray, depth+1)))
+			* phase	
+			/ exp(-tr_average * d)
+			/ (1.0 / (4.0 * PI))
+			/ scattering_probability
+			/ russian_roulette_probability;
+	} else { // レイと物体の交差点からの放射輝度伝達を計算
+		const Vec transmittance_ratio = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
+		switch (obj.ref_type) { 
+		case DIFFUSE: {	// 直接光のサンプリングを行う
+			if (id != LightID) {
+				const int shadow_ray = 1;
+				Vec direct_light;
+				for (int i = 0; i < shadow_ray; i ++) {
+					direct_light = direct_light + direct_radiance_sample(hitpoint, orienting_normal, id) / shadow_ray;
+				}
 
-			return 
-				(Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) * 0.5 +
-				radiance_through_media(Ray(hitpoint, ray.dir), 0, id) * 0.5) / russian_roulette_probability;
-		} else {
-			const double probability = 0.5;
-			if (rand01() < probability) {
-				return Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) * 0.5
-						/ probability
-						/ russian_roulette_probability;
-			} else {
-				return radiance_through_media(Ray(hitpoint, ray.dir), 0, id) * 0.5
-						/ (1.0 - probability)
-						/ russian_roulette_probability;
-			}
-		}
-	} break;
+				// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
+				Vec w, u, v;
+				w = orienting_normal;
+				if (fabs(w.x) > 0.1)
+					u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
+				else
+					u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
+				v = Cross(w, u);
+				// コサイン項を使った重点的サンプリング
+				const double r1 = 2 * PI * rand01();
+				const double r2 = rand01(), r2s = sqrt(r2);
+				Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
 
-	case DIFFUSE: {
-		// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
-		Vec w, u, v;
-		w = orienting_normal;
-		if (fabs(w.x) > 0.1)
-			u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
-		else
-			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
-		v = Cross(w, u);
-		// コサイン項を使った重点的サンプリング
-		const double r1 = 2 * PI * rand01();
-		const double r2 = rand01(), r2s = sqrt(r2);
-		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
+				// 減衰を考慮しつつ次を計算
+				return direct_light + Multiply(transmittance_ratio, Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1))) / (1.0 - scattering_probability) / russian_roulette_probability;
+			} else if (depth == 0) {
+				return obj.emission;
+			} else
+				return Color();
+		} break;
+		case SPECULAR: {
+			// 完全鏡面なのでレイの反射方向は決定的。
+			// ロシアンルーレットの確率で除算するのは上と同じ。
+			double lt;
+			int lid;
+			Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
+			intersect_scene(reflection_ray, &lt, &lid);
+			Vec direct_light;
+			if (lid == LightID)
+				direct_light = direct_radiance(hitpoint, orienting_normal, id, reflection_ray.org + lt * reflection_ray.dir);
 
-		// レンダリング方程式に従えば Le + Li(ray) * BRDF * cosθ / pdf(ray) になる。
-		// ただし、上でコサイン項による重点的サンプリングをしたためpdf(ray) = cosθ/πになり、
-		// Diffuse面のBRDF = 1/πなので、これらを代入すると Le + Li(ray) となる。
-		// これにロシアンルーレットの確率を除算したものが最終的な計算式になる。
-		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / russian_roulette_probability;
-	} break;
-	case SPECULAR: {
-		// 完全鏡面なのでレイの反射方向は決定的。
-		// ロシアンルーレットの確率で除算するのは上と同じ。
-		return obj.emission + Multiply(obj.color,
-			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / russian_roulette_probability;
-	} break;
-	case REFRACTION: {
-		Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
-		bool into = Dot(normal, orienting_normal) > 0.0; // レイがオブジェクトから出るのか、入るのか
-
-		// Snellの法則
-		const double nc = 1.0; // 真空の屈折率
-		const double nt = 1.5; // オブジェクトの屈折率
-		const double nnt = into ? nc / nt : nt / nc;
-		const double ddn = Dot(ray.dir, orienting_normal);
-		const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
+			return direct_light + 
+				Multiply(transmittance_ratio, radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / (1.0 - scattering_probability) / russian_roulette_probability;
+		} break;
+		case REFRACTION: {
+			Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
 		
-		if (cos2t < 0.0) { // 全反射した
-			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / russian_roulette_probability;
-		}
-		// 屈折していく方向
-		Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
+			// 反射方向からの直接光サンプリングする
+			double lt;
+			int lid;
+			intersect_scene(reflection_ray, &lt, &lid);
+			Vec direct_light;
+			if (lid == LightID)
+				direct_light = direct_radiance(hitpoint, orienting_normal, id, reflection_ray.org + lt * reflection_ray.dir);
+			bool into = Dot(normal, orienting_normal) > 0.0; // レイがオブジェクトから出るのか、入るのか
 
-		// SchlickによるFresnelの反射係数の近似
-		const double a = nt - nc, b = nt + nc;
-		const double R0 = (a * a) / (b * b);
-		const double c = 1.0 - (into ? -ddn : Dot(tdir, normal));
-		const double Re = R0 + (1.0 - R0) * pow(c, 5.0);
-		const double Tr = 1.0 - Re; // 屈折光の運ぶ光の量
-		const double probability  = 0.25 + 0.5 * Re;
-
-		// 一定以上レイを追跡したら屈折と反射のどちらか一方を追跡する。（さもないと指数的にレイが増える）
-		// ロシアンルーレットで決定する。
-		if (depth > 2) {
-			if (rand01() < probability) { // 反射
-				return obj.emission + 
-					Multiply(obj.color, radiance(reflection_ray, depth+1) * Re)
-					/ probability
-					/ russian_roulette_probability;
-			} else { // 屈折
-				return obj.emission + 
-					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr)
-					/ (1.0 - probability) 
-					/ russian_roulette_probability;
+			// Snellの法則
+			const double nc = 1.0; // 真空の屈折率
+			const double nt = 1.5; // オブジェクトの屈折率
+			const double nnt = into ? nc / nt : nt / nc;
+			const double ddn = Dot(ray.dir, orienting_normal);
+			const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
+		
+			if (cos2t < 0.0) { // 全反射した
+				return direct_light + Multiply(transmittance_ratio, Multiply(obj.color, (radiance(reflection_ray, depth+1)))) / (1.0 - scattering_probability) / russian_roulette_probability;
 			}
-		} else { // 屈折と反射の両方を追跡
-			return obj.emission + 
-				Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
-				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / russian_roulette_probability;
+			// 屈折していく方向
+			Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
+
+			// SchlickによるFresnelの反射係数の近似
+			const double a = nt - nc, b = nt + nc;
+			const double R0 = (a * a) / (b * b);
+			const double c = 1.0 - (into ? -ddn : Dot(tdir, normal));
+			const double Re = R0 + (1.0 - R0) * pow(c, 5.0);
+			const double Tr = 1.0 - Re; // 屈折光の運ぶ光の量
+			const double probability  = 0.25 + 0.5 * Re;
+			
+			// 屈折方向からの直接光サンプリングする
+			Ray refraction_ray = Ray(hitpoint, tdir);
+			intersect_scene(refraction_ray, &lt, &lid);
+			Vec direct_light_refraction;
+			if (lid == LightID)
+				direct_light_refraction = direct_radiance(hitpoint, -1.0 * orienting_normal, id, refraction_ray.org + lt * refraction_ray.dir);
+		
+			// 一定以上レイを追跡したら屈折と反射のどちらか一方を追跡する。（さもないと指数的にレイが増える）
+			// ロシアンルーレットで決定する。
+			if (depth > 2) {
+				if (rand01() < probability) { // 反射
+					return direct_light + 
+						Multiply(transmittance_ratio, Multiply(obj.color, radiance(reflection_ray, depth+1) * Re))
+						/ probability
+						/ (1.0 - scattering_probability)
+						/ russian_roulette_probability;
+				} else { // 屈折
+					return direct_light_refraction + 
+						Multiply(transmittance_ratio, Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr))
+						/ (1.0 - probability) 
+						/ (1.0 - scattering_probability)
+						/ russian_roulette_probability;
+				}
+			} else { // 屈折と反射の両方を追跡
+				return direct_light + direct_light_refraction +
+					Multiply(transmittance_ratio, Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
+									  + radiance(Ray(hitpoint, tdir), depth+1) * Tr)) / (1.0 - scattering_probability) / russian_roulette_probability;
+			}
+		} break;
 		}
-	} break;
+
 	}
 }
 
@@ -373,19 +412,19 @@ void save_hdr_file(const std::string &filename, const Color* image, const int wi
 int main(int argc, char **argv) {
 	int width = 640;
 	int height = 480;
-	int samples = 1000 / 4;
+	int samples = 32;
 
 	// カメラ位置
-	Ray camera(Vec(50.0, 52.0, 295.6), Normalize(Vec(0.0, -0.042612, -1.0)));
+	Ray camera(0.1 * Vec(50.0, 52.0, 295.6), Normalize(Vec(0.0, -0.042612, -1.0)));
 	// シーン内でのスクリーンのx,y方向のベクトル
 	Vec cx = Vec(width * 0.5135 / height);
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
-	 
- #pragma omp parallel for schedule(dynamic, 1)
+	
+// #pragma omp parallel for schedule(dynamic, 1) num_threads(8)
 	for (int y = 0; y < height; y ++) {
 		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
-		srand(y * y * y);			
+		srand(y * y * y); 
 		for (int x = 0; x < width; x ++) {
 			int image_index = y * width + x;	
 			image[image_index] = Color();
@@ -403,7 +442,7 @@ int main(int argc, char **argv) {
 						Vec dir = cx * (((sx + 0.5 + dx) / 2.0 + x) / width - 0.5) +
 								  cy * (((sy + 0.5 + dy) / 2.0 + y) / height- 0.5) + camera.dir;
 						accumulated_radiance = accumulated_radiance + 
-							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0) / samples;
+							radiance(Ray(camera.org + dir * 13.0, Normalize(dir)), 0) / samples;
 					}
 					image[image_index] = image[image_index] + accumulated_radiance;
 				}
