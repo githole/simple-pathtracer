@@ -84,8 +84,11 @@ Sphere spheres[] = {
 	Sphere(1e5, Vec(50,40.8,-1e5+170), Color(), Color(), DIFFUSE),// 手前
 	Sphere(1e5, Vec(50, 1e5, 81.6),    Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 床
 	Sphere(1e5, Vec(50,-1e5+81.6,81.6),Color(), Color(0.75, 0.75, 0.75),DIFFUSE),// 天井
+
 	Sphere(16.5,Vec(27,16.5,47),       Color(), Color(1,1,1)*.99, SPECULAR),// 鏡
-	Sphere(16.5,Vec(73,16.5,78),       Color(), Color(1,1,1)*.99, REFRACTION),//ガラス
+	Sphere(16.5,Vec(73,16.5,78),       Color(), Color(0.75, 0.75, 0.75), DIFFUSE),
+	Sphere(16.5,Vec(50,16.5,110),       Color(), Color(0.25, 0.75, 0.25), DIFFUSE),
+
 	Sphere(5.0, Vec(50.0, 75.0, 81.6),Color(12,12,12), Color(), DIFFUSE),//照明
 };
 
@@ -268,6 +271,49 @@ void save_hdr_file(const std::string &filename, const Color* image, const int wi
 	fclose(fp);
 }
 
+// concentricにサンプリング
+void concentric_sample_disk(double u1, double u2, double *dx, double *dy) {
+    double r, theta;
+    // [0, 1]の一様乱数u1,u2を[-1, 1]の一様乱数sx,syに写像
+    const double sx = 2 * u1 - 1;
+    const double sy = 2 * u2 - 1;
+
+
+    // sx, syが0,0だった場合は特別に処理
+    if (sx == 0.0 && sy == 0.0) {
+        *dx = 0.0;
+        *dy = 0.0;
+        return;
+    }
+	// 四つに分割した円の各部位で別々の処理になる
+    if (sx >= -sy) {
+        if (sx > sy) {
+            r = sx;
+            if (sy > 0.0) theta = sy/r;
+            else          theta = 8.0f + sy/r;
+        }
+        else {
+            r = sy;
+            theta = 2.0f - sx/r;
+        }
+    }
+    else {
+        if (sx <= sy) {
+            r = -sx;
+            theta = 4.0f - sy/r;
+        }
+        else {
+            r = -sy;
+            theta = 6.0f + sx/r;
+        }
+    }
+    theta *= PI / 4.f;
+    *dx = r * cosf(theta);
+    *dy = r * sinf(theta);
+}
+
+
+
 int main(int argc, char **argv) {
 	int width = 640;
 	int height = 480;
@@ -280,6 +326,7 @@ int main(int argc, char **argv) {
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
 
+ #pragma omp parallel for schedule(dynamic, 1)
 	for (int y = 0; y < height; y ++) {
 		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
 		srand(y * y * y);
@@ -287,7 +334,7 @@ int main(int argc, char **argv) {
 			int image_index = y * width + x;	
 			image[image_index] = Color();
 
-			// 2x2のサブピクセルサンプリング
+			// 2x2のサブピクセルサンプリング 
 			for (int sy = 0; sy < 2; sy ++) {
 				for (int sx = 0; sx < 2; sx ++) {
 					Color accumulated_radiance = Color();
@@ -299,8 +346,22 @@ int main(int argc, char **argv) {
 						const double r2 = 2.0 * rand01(), dy = r2 < 1.0 ? sqrt(r2) - 1.0 : 1.0 - sqrt(2.0 - r2);
 						Vec dir = cx * (((sx + 0.5 + dx) / 2.0 + x) / width - 0.5) +
 								  cy * (((sy + 0.5 + dy) / 2.0 + y) / height- 0.5) + camera.dir;
-						accumulated_radiance = accumulated_radiance + 
-							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0) / samples;
+
+						// レイがレンズにあたって屈折することでDOFが発生する。そのシミュレーション。
+						Ray ray(camera.org + dir * 130.0, Normalize(dir));
+						double lensU, lensV;
+						double lensRadius = 2.0;
+						double focalDistance = 50.0;
+						concentric_sample_disk(rand01(), rand01(), &lensU, &lensV);
+						lensU *= lensRadius;
+						lensV *= lensRadius;
+						double ft = fabs(focalDistance / ray.dir.z);
+						Vec Pfocus = ray.org + ray.dir * ft;
+						
+						ray.org = ray.org + Vec(lensU, lensV, 0.f);
+						ray.dir = Normalize(Pfocus - ray.org);
+
+						accumulated_radiance = accumulated_radiance + radiance(ray, 0) / samples;
 					}
 					image[image_index] = image[image_index] + accumulated_radiance;
 				}
