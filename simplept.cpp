@@ -105,8 +105,87 @@ inline bool intersect_scene(const Ray &ray, double *t, int *id) {
 	return *t < INF;
 }
 
+// *** QMC用関数等 ***
+static std::vector<int> prime_numbers;
+
+void init_prime_numbers() {
+	// エラトステネスの篩
+	const int N = 10000000; // 10000000までの素数をテーブルに格納する（664579個）
+	const int sqrtN = sqrt((double)N);
+	std::vector<char> table;
+	table.resize(N + 1, 0);
+		
+	for (int i = 2; i*i <= N; i ++) {
+		if (table[i] == 0) { // iが素数であった
+			// ふるう
+			for (int j = i+i; j <= N; j += i)
+				table[j] = 1;
+		}
+	}
+
+	// 列挙する
+	for (int i = 2; i <= N; i ++) {
+		if (table[i] == 0) {
+			prime_numbers.push_back(i);
+		}
+	}
+}
+
+
+class QMC {
+private:
+public:
+	int j; // Halton列のj個目の値を得る
+	int ith; // i番目のサンプル
+	QMC(const int ith_) : ith(ith_) {
+		j = 0;
+	}
+
+	// Halton列を得る
+	// Radical inverse function 
+	//   φ_b(i) = 0.d1d2d3...dk...
+	// i番目のn次元Halton列 
+	//   x_i = (φ_2(i), φ_3(i),..., φ_pj(i),..., φ_pn(i)), pn = n番目の素数
+	//
+	
+	// i番目のn次元Halton列のj個目の要素を得る
+	// つまりφ_pj(i)を計算する
+	inline double next() {
+		// 素数テーブルを超える次元のサンプルを得ることはできない！
+		// ロシアンルーレットがあまりにもうまくいった場合など、ここに入ることもあり得る（非常に低確率だが）
+		// 先にスタックオーバーフローするかもしれない
+		if (j >= prime_numbers.size()) {
+			return rand01();
+		}
+		// 以下、φ_b(i)を計算する
+		const int base = prime_numbers[j++];
+		double value = 0.0;
+		double inv_base = 1.0 / (double)base;
+		double factor = inv_base;
+		int i = ith;
+
+		while (i > 0) {
+			// 適当にd_kを入れ替える	
+			const int d_k = reverse(i % base, base); 
+			value += d_k * factor;
+			i /= base;
+			factor *= inv_base;
+		}
+		return value;
+	}
+
+	inline int reverse(const int i, const int p) {
+		if (i == 0) 
+			return i; 
+		else 
+			return p - i;	
+	}
+};
+
+
 // ray方向からの放射輝度を求める
-Color radiance(const Ray &ray, const int depth) {
+Color radiance(const Ray &ray, const int depth, QMC &qmc) {
+	int d3 = depth * 5;
 	double t; // レイからシーンの交差位置までの距離
 	int id;   // 交差したシーン内オブジェクトのID
 	if (!intersect_scene(ray, &t, &id))
@@ -121,7 +200,7 @@ Color radiance(const Ray &ray, const int depth) {
 	double russian_roulette_probability = std::max(obj.color.x, std::max(obj.color.y, obj.color.z));
 	// 一定以上レイを追跡したらロシアンルーレットを実行し追跡を打ち切るかどうかを判断する
 	if (depth > MaxDepth) {
-		if (rand01() >= russian_roulette_probability)
+		if (qmc.next() >= russian_roulette_probability)
 			return obj.emission;
 	} else
 		russian_roulette_probability = 1.0; // ロシアンルーレット実行しなかった
@@ -137,21 +216,21 @@ Color radiance(const Ray &ray, const int depth) {
 			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
 		v = Cross(w, u);
 		// コサイン項を使った重点的サンプリング
-		const double r1 = 2 * PI * rand01();
-		const double r2 = rand01(), r2s = sqrt(r2);
+		const double r1 = 2 * PI * qmc.next();
+		const double r2 = qmc.next(), r2s = sqrt(r2);
 		Vec dir = Normalize((u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1.0 - r2)));
 
 		// レンダリング方程式に従えば Le + Li(ray) * BRDF * cosθ / pdf(ray) になる。
 		// ただし、上でコサイン項による重点的サンプリングをしたためpdf(ray) = cosθ/πになり、
 		// Diffuse面のBRDF = 1/πなので、これらを代入すると Le + Li(ray) となる。
 		// これにロシアンルーレットの確率を除算したものが最終的な計算式になる。
-		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1)) / russian_roulette_probability;
+		return obj.emission + Multiply(obj.color, radiance(Ray(hitpoint, dir), depth+1, qmc)) / russian_roulette_probability;
 	} break;
 	case SPECULAR: {
 		// 完全鏡面なのでレイの反射方向は決定的。
 		// ロシアンルーレットの確率で除算するのは上と同じ。
 		return obj.emission + Multiply(obj.color,
-			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1)) / russian_roulette_probability;
+			radiance(Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir)), depth+1, qmc)) / russian_roulette_probability;
 	} break;
 	case REFRACTION: {
 		Ray reflection_ray = Ray(hitpoint, ray.dir - normal * 2.0 * Dot(normal, ray.dir));
@@ -165,7 +244,7 @@ Color radiance(const Ray &ray, const int depth) {
 		const double cos2t = 1.0 - nnt * nnt * (1.0 - ddn * ddn);
 		
 		if (cos2t < 0.0) { // 全反射した
-			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1))) / russian_roulette_probability;
+			return obj.emission + Multiply(obj.color, (radiance(reflection_ray, depth+1, qmc))) / russian_roulette_probability;
 		}
 		// 屈折していく方向
 		Vec tdir = Normalize(ray.dir * nnt - normal * (into ? 1.0 : -1.0) * (ddn * nnt + sqrt(cos2t)));
@@ -181,21 +260,21 @@ Color radiance(const Ray &ray, const int depth) {
 		// 一定以上レイを追跡したら屈折と反射のどちらか一方を追跡する。（さもないと指数的にレイが増える）
 		// ロシアンルーレットで決定する。
 		if (depth > 2) {
-			if (rand01() < probability) { // 反射
+			if (qmc.next() < probability) { // 反射
 				return obj.emission + 
-					Multiply(obj.color, radiance(reflection_ray, depth+1) * Re)
+					Multiply(obj.color, radiance(reflection_ray, depth+1, qmc) * Re)
 					/ probability
 					/ russian_roulette_probability;
 			} else { // 屈折
 				return obj.emission + 
-					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1) * Tr)
+					Multiply(obj.color, radiance(Ray(hitpoint, tdir), depth+1, qmc) * Tr)
 					/ (1.0 - probability) 
 					/ russian_roulette_probability;
 			}
 		} else { // 屈折と反射の両方を追跡
 			return obj.emission + 
-				Multiply(obj.color, radiance(reflection_ray, depth+1) * Re
-				                  + radiance(Ray(hitpoint, tdir), depth+1) * Tr) / russian_roulette_probability;
+				Multiply(obj.color, radiance(reflection_ray, depth+1, qmc) * Re
+				                  + radiance(Ray(hitpoint, tdir), depth+1, qmc) * Tr) / russian_roulette_probability;
 		}
 	} break;
 	}
@@ -280,6 +359,10 @@ int main(int argc, char **argv) {
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
 
+	// QMC用の素数テーブル初期化
+	init_prime_numbers();
+
+//#pragma omp parallel for schedule(dynamic, 1)
 	for (int y = 0; y < height; y ++) {
 		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
 		srand(y * y * y);
@@ -293,14 +376,16 @@ int main(int argc, char **argv) {
 					Color accumulated_radiance = Color();
 					// 一つのサブピクセルあたりsamples回サンプリングする
 					for (int s = 0; s < samples; s ++) {
+						QMC qmc((y * height * 4 + x * 4 + sy * 2 + sx) * samples + s + 1);
+
 						// テントフィルターによってサンプリング
 						// ピクセル範囲で一様にサンプリングするのではなく、ピクセル中央付近にサンプルがたくさん集まるように偏りを生じさせる
-						const double r1 = 2.0 * rand01(), dx = r1 < 1.0 ? sqrt(r1) - 1.0 : 1.0 - sqrt(2.0 - r1);
-						const double r2 = 2.0 * rand01(), dy = r2 < 1.0 ? sqrt(r2) - 1.0 : 1.0 - sqrt(2.0 - r2);
+						const double r1 = 2.0 * qmc.next(), dx = r1 < 1.0 ? sqrt(r1) - 1.0 : 1.0 - sqrt(2.0 - r1);
+						const double r2 = 2.0 * qmc.next(), dy = r2 < 1.0 ? sqrt(r2) - 1.0 : 1.0 - sqrt(2.0 - r2);
 						Vec dir = cx * (((sx + 0.5 + dx) / 2.0 + x) / width - 0.5) +
 								  cy * (((sy + 0.5 + dy) / 2.0 + y) / height- 0.5) + camera.dir;
 						accumulated_radiance = accumulated_radiance + 
-							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0) / samples;
+							radiance(Ray(camera.org + dir * 130.0, Normalize(dir)), 0, qmc) / samples;
 					}
 					image[image_index] = image[image_index] + accumulated_radiance;
 				}
