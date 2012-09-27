@@ -222,12 +222,16 @@ Color radiance(const Ray &ray, const int depth) {
 		const Vec transmittance_ratio = Vec(exp(-transmittance.x * d), exp(-transmittance.y * d), exp(-transmittance.z * d));
 		const Vec direct_light = direct_radiance_sample_media(next_ray.org);
 
-		return Multiply(transmittance_ratio, Multiply(scattering, direct_light + radiance(next_ray, depth+1)))
-			* phase	
-			/ pdf
-			/ (1.0 / (4.0 * PI))
-			/ scattering_probability
-			/ russian_roulette_probability;
+		if (pdf == 0.0) {
+			return Color();
+		} else {
+			return Multiply(transmittance_ratio, Multiply(scattering, direct_light + radiance(next_ray, depth+1)))
+				* phase	
+				/ pdf
+				/ (1.0 / (4.0 * PI))
+				/ scattering_probability
+				/ russian_roulette_probability;
+		}
 	} else { // レイと物体の交差点からの放射輝度伝達を計算
 		const Vec transmittance_ratio = Vec(exp(-transmittance.x * t), exp(-transmittance.y * t), exp(-transmittance.z * t));
 		switch (obj.ref_type) { 
