@@ -210,12 +210,11 @@ Color radiance(const Ray &ray, const int depth) {
 		scattering_probability = 0.1;
 
 	if (rand01() < scattering_probability) { // 周囲からの影響を考慮（つまりまわりから来た光が散乱してray方向に来た）
-		// 棄却サンプリングによってどこまで光が進行するかを得る
-		double d = 0.0;
-		do {
-			d = -log(rand01()) / tr_average;
-		} while (d > t);
-
+		// 減衰に応じた重点サンプリング
+		const double u = rand01();
+		const double d = -log(1.0 + u * (exp(-tr_average * t) - 1.0)) / tr_average;
+		const double pdf = exp(-tr_average * d) * (-tr_average / (exp(-tr_average * t) - 1.0));
+		
 		// 等方散乱
 		const double r1 = 2 * PI * rand01();
 		const double r2 = 1.0 - 2.0 * rand01() ;
@@ -223,10 +222,9 @@ Color radiance(const Ray &ray, const int depth) {
 		const Vec transmittance_ratio = Vec(exp(-transmittance.x * d), exp(-transmittance.y * d), exp(-transmittance.z * d));
 		const Vec direct_light = direct_radiance_sample_media(next_ray.org);
 
-		// 若干計算間違っているかもしれない・・・
 		return Multiply(transmittance_ratio, Multiply(scattering, direct_light + radiance(next_ray, depth+1)))
 			* phase	
-			/ exp(-tr_average * d)
+			/ pdf
 			/ (1.0 / (4.0 * PI))
 			/ scattering_probability
 			/ russian_roulette_probability;
