@@ -167,7 +167,7 @@ Color radiance(const Ray &ray, const int depth) {
 				phi += PI;
 			else if (0.75 < u2)
 				phi += 2.0 * PI;
-			const double theta = atan(sqrt(-log(u1) / (pow(cos(theta), 2) / pow(alpha_x, 2) + pow(sin(theta), 2) / pow(alpha_y, 2))));
+			const double theta = atan(sqrt(-log(u1) / (pow(cos(phi), 2) / pow(alpha_x, 2) + pow(sin(phi), 2) / pow(alpha_y, 2))));
 
 			halfv = Normalize((u * cos(phi) * sin(theta) + v * sin(phi) * sin(theta) + w * cos(theta)));
 			dir = 2.0 * Dot(in, halfv) * halfv - in;
