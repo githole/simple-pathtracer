@@ -280,9 +280,10 @@ int main(int argc, char **argv) {
 	Vec cy = Normalize(Cross(cx, camera.dir)) * 0.5135;
 	Color *image = new Color[width * height];
 
+// #pragma omp parallel for schedule(dynamic, 1) num_threads(4)
 	for (int y = 0; y < height; y ++) {
 		std::cerr << "Rendering (" << samples * 4 << " spp) " << (100.0 * y / (height - 1)) << "%" << std::endl;
-		srand(y * y * y);
+		srand(y * y + y);
 		for (int x = 0; x < width; x ++) {
 			int image_index = y * width + x;	
 			image[image_index] = Color();
