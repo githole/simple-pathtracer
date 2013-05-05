@@ -131,7 +131,7 @@ Color radiance(const Ray &ray, const int depth) {
 		// orienting_normalの方向を基準とした正規直交基底(w, u, v)を作る。この基底に対する半球内で次のレイを飛ばす。
 		Vec w, u, v;
 		w = orienting_normal;
-		if (fabs(w.x) > 0.1)
+		if (fabs(w.x) > 0.1) // ベクトルwと直交するベクトルを作る。w.xが0に近い場合とそうでない場合とで使うベクトルを変える。
 			u = Normalize(Cross(Vec(0.0, 1.0, 0.0), w));
 		else
 			u = Normalize(Cross(Vec(1.0, 0.0, 0.0), w));
