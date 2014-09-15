@@ -359,7 +359,7 @@ int main(int argc, char **argv) {
 						concentric_sample_disk(rand01(), rand01(), &lensU, &lensV);
 						lensU *= lensRadius;
 						lensV *= lensRadius;
-						double ft = fabs(focalDistance / ray.dir.z);
+						double ft = fabs(focalDistance / dot(ray.dir, camera.dir));
 						Vec Pfocus = ray.org + ray.dir * ft;
 						
 						ray.org = ray.org + Vec(lensU, lensV, 0.f);
